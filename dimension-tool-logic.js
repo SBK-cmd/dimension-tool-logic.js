@@ -1,17 +1,17 @@
 /*
   dimension-tool-logic.js  (remote-hosted ExtendScript logic)
   --------------------------------------------------------------
-  DIMENSION_TOOL_VERSION = "1.3.0"
+  DIMENSION_TOOL_VERSION = "1.5.0"
 
   Fetched fresh from the web by the Dimension Line Tool panel every
-  time you click "สร้างเส้นบอกขนาด", then run inside Illustrator.
-  Editing this file (or the GitHub file it is copied into) updates
-  the tool immediately for anyone using the panel — no reinstall.
+  time you click "สร้างเส้นบอกขนาด" (or live-adjust a font-size field),
+  then run inside Illustrator. Editing this file (or the GitHub file
+  it is copied into) updates the tool immediately — no reinstall.
 
   Exposes createDimensionLines(paramsJSON), called right after this
   script is evaluated.
 */
-var DIMENSION_TOOL_VERSION = "1.3.0";
+var DIMENSION_TOOL_VERSION = "1.5.0";
 
 // ---------- Thai strings used on the artboard / console (unicode-escaped for safety) ----------
 var STR_ERR_NO_DOC = "กรุณาเปิดไฟล์งานก่อนใช้งานนี้";
@@ -87,4 +87,127 @@ function createDimensionLines(paramsJSON) {
             } else {
                 left = Math.min(left, bb[0]);
                 top = Math.max(top, bb[1]);
-                right = Math.max(right,
+                right = Math.max(right, bb[2]);
+                bottom = Math.min(bottom, bb[3]);
+            }
+        }
+        var widthPt = right - left;
+        var heightPt = top - bottom;
+        var widthVal = formatNumber(ptToUnit(widthPt, unit)) + " " + unitLabel(unit);
+        var heightVal = formatNumber(ptToUnit(heightPt, unit)) + " " + unitLabel(unit);
+
+        var gapPt = mmToPt(gapMM);
+        var capLen = mmToPt(4);     // length of the small perpendicular end-cap tick
+        var textGap = mmToPt(2);
+
+        // ---------- dimension layer ----------
+        var dimLayer;
+        try {
+            dimLayer = doc.layers.getByName(STR_LAYER_NAME);
+        } catch (e) {
+            dimLayer = doc.layers.add();
+            dimLayer.name = STR_LAYER_NAME;
+        }
+        dimLayer.locked = false;
+        dimLayer.visible = true;
+
+        // clear any dimension objects left over from a previous click so
+        // re-running never stacks duplicate/overlapping lines on top
+        while (dimLayer.pageItems.length > 0) {
+            dimLayer.pageItems[0].remove();
+        }
+
+        var lineColor = new RGBColor();
+        lineColor.red = r; lineColor.green = g; lineColor.blue = b;
+
+        function setStroke(item) {
+            item.stroked = true;
+            item.strokeColor = lineColor;
+            item.strokeWidth = 1;
+            item.filled = false;
+        }
+        function setFillShape(item) {
+            item.filled = true;
+            item.fillColor = lineColor;
+            item.stroked = false;
+        }
+        function addLine(x1, y1, x2, y2) {
+            var path = dimLayer.pathItems.add();
+            path.setEntirePath([[x1, y1], [x2, y2]]);
+            setStroke(path);
+            return path;
+        }
+        function addCap(x, y, dirX, dirY) {
+            // dirX/dirY: unit vector along the dimension line at this end.
+            // Draws a short tick perpendicular to the line, centered on (x, y).
+            var perpX = -dirY, perpY = dirX;
+            var half = capLen / 2;
+            return addLine(x - perpX * half, y - perpY * half, x + perpX * half, y + perpY * half);
+        }
+        function addText(content, x, y, justification, rotateDeg, sizePt) {
+            var t = dimLayer.textFrames.add();
+            t.contents = content;
+            t.textRange.characterAttributes.size = sizePt;
+            try {
+                var f = app.textFonts.getByName(fontName);
+                t.textRange.characterAttributes.textFont = f;
+            } catch (e) {
+                $.writeln(STR_ERR_FONT + " (" + fontName + ")");
+            }
+            if (bold) {
+                try {
+                    var famName = t.textRange.characterAttributes.textFont.family.name;
+                    var boldFont = app.textFonts.getByName(famName + "-Bold");
+                    t.textRange.characterAttributes.textFont = boldFont;
+                } catch (e2) { /* ignore if bold face not found */ }
+            }
+            t.textRange.characterAttributes.fillColor = lineColor;
+            t.contents = content;
+            t.paragraphs[0].justification = justification;
+            t.position = [x, y];
+            if (rotateDeg) t.rotate(rotateDeg);
+            return t;
+        }
+
+        var createdItems = [];
+
+        // ===== WIDTH dimension (horizontal, above artwork) =====
+        var wY = top + gapPt;
+        createdItems.push(addLine(left, wY, right, wY));   // main horizontal dim line
+        createdItems.push(addCap(left, wY, 1, 0));          // end-cap tick, left
+        createdItems.push(addCap(right, wY, 1, 0));         // end-cap tick, right
+        // baseline offset so the glyphs sit straddling the line (line runs
+        // through the middle of the text) instead of floating above it
+        createdItems.push(addText(widthVal, (left + right) / 2, wY - fontSizeDim * 0.32, Justification.CENTER, 0, fontSizeDim));
+
+        // ===== HEIGHT dimension (vertical, right of artwork) =====
+        var hX = right + gapPt;
+        createdItems.push(addLine(hX, top, hX, bottom));    // main vertical dim line
+        createdItems.push(addCap(hX, top, 0, 1));           // end-cap tick, top
+        createdItems.push(addCap(hX, bottom, 0, 1));        // end-cap tick, bottom
+        createdItems.push(addText(heightVal, hX + textGap, (top + bottom) / 2, Justification.LEFT,
+            rotateVertical ? 90 : 0, fontSizeDim));
+
+        // ===== QUANTITY text (centered below artwork) =====
+        var qtyContent = (prefixText ? prefixText + " " : "") + qtyText + (suffixText ? " " + suffixText : "");
+        var qY = bottom - gapPt - mmToPt(3);
+        createdItems.push(addText(qtyContent, (left + right) / 2, qY, Justification.CENTER, 0, fontSizeQty));
+
+        // ---------- group everything ----------
+        var grp = dimLayer.groupItems.add();
+        grp.name = STR_GROUP_NAME;
+        for (var gi = createdItems.length - 1; gi >= 0; gi--) {
+            createdItems[gi].move(grp, ElementPlacement.PLACEATBEGINNING);
+        }
+
+        // keep the ORIGINAL artwork selected (not the new dimension group) so
+        // repeated calls — e.g. live updates while adjusting font size —
+        // keep measuring the same artwork instead of the dimension lines
+        doc.selection = sel;
+        app.redraw();
+
+        return "OK:" + STR_OK_DONE + " (" + widthVal + " x " + heightVal + ") [v" + DIMENSION_TOOL_VERSION + "]";
+    } catch (err) {
+        return "ERR:" + err.toString();
+    }
+}
