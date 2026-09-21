@@ -1,17 +1,17 @@
 /*
   dimension-tool-logic.js  (remote-hosted ExtendScript logic)
   --------------------------------------------------------------
-  DIMENSION_TOOL_VERSION = "1.1.0"
+  DIMENSION_TOOL_VERSION = "1.2.0"
 
   Fetched fresh from the web by the Dimension Line Tool panel every
   time you click "สร้างเส้นบอกขนาด", then run inside Illustrator.
-  Editing this file (republishing this artifact) updates the tool
-  for everyone using the panel — no reinstall needed.
+  Editing this file (or the GitHub file it is copied into) updates
+  the tool immediately for anyone using the panel — no reinstall.
 
   Exposes createDimensionLines(paramsJSON), called right after this
   script is evaluated.
 */
-var DIMENSION_TOOL_VERSION = "1.1.0";
+var DIMENSION_TOOL_VERSION = "1.2.0";
 
 // ---------- Thai strings used on the artboard / console (unicode-escaped for safety) ----------
 var STR_ERR_NO_DOC = "กรุณาเปิดไฟล์งานก่อนใช้งานนี้";
@@ -42,7 +42,10 @@ function createDimensionLines(paramsJSON) {
         var gapMM = isFinite(p.gapMM) ? p.gapMM : 5;
         var r = clamp255(p.r), g = clamp255(p.g), b = clamp255(p.b);
         var fontName = p.font || "NotoSansThai-Regular";
-        var fontSize = (isFinite(p.fontSize) && p.fontSize > 0) ? p.fontSize : 24;
+        var fontSizeDim = (isFinite(p.fontSizeDim) && p.fontSizeDim > 0) ? p.fontSizeDim :
+            ((isFinite(p.fontSize) && p.fontSize > 0) ? p.fontSize : 24);
+        var fontSizeQty = (isFinite(p.fontSizeQty) && p.fontSizeQty > 0) ? p.fontSizeQty :
+            ((isFinite(p.fontSize) && p.fontSize > 0) ? p.fontSize : 24);
         var bold = !!p.bold;
         var rotateVertical = !!p.rotateVertical;
         var prefixText = p.prefix !== undefined ? p.prefix : "";
@@ -135,10 +138,10 @@ function createDimensionLines(paramsJSON) {
             var half = capLen / 2;
             return addLine(x - perpX * half, y - perpY * half, x + perpX * half, y + perpY * half);
         }
-        function addText(content, x, y, justification, rotateDeg) {
+        function addText(content, x, y, justification, rotateDeg, sizePt) {
             var t = dimLayer.textFrames.add();
             t.contents = content;
-            t.textRange.characterAttributes.size = fontSize;
+            t.textRange.characterAttributes.size = sizePt;
             try {
                 var f = app.textFonts.getByName(fontName);
                 t.textRange.characterAttributes.textFont = f;
@@ -167,7 +170,7 @@ function createDimensionLines(paramsJSON) {
         createdItems.push(addLine(left, wY, right, wY));   // main horizontal dim line
         createdItems.push(addCap(left, wY, 1, 0));          // end-cap tick, left
         createdItems.push(addCap(right, wY, 1, 0));         // end-cap tick, right
-        createdItems.push(addText(widthVal, (left + right) / 2, wY + textGap, Justification.CENTER, 0));
+        createdItems.push(addText(widthVal, (left + right) / 2, wY + textGap, Justification.CENTER, 0, fontSizeDim));
 
         // ===== HEIGHT dimension (vertical, right of artwork) =====
         var hX = right + gapPt;
@@ -175,12 +178,12 @@ function createDimensionLines(paramsJSON) {
         createdItems.push(addCap(hX, top, 0, 1));           // end-cap tick, top
         createdItems.push(addCap(hX, bottom, 0, 1));        // end-cap tick, bottom
         createdItems.push(addText(heightVal, hX + textGap, (top + bottom) / 2, Justification.LEFT,
-            rotateVertical ? 90 : 0));
+            rotateVertical ? 90 : 0, fontSizeDim));
 
         // ===== QUANTITY text (centered below artwork) =====
         var qtyContent = (prefixText ? prefixText + " " : "") + qtyText + (suffixText ? " " + suffixText : "");
         var qY = bottom - gapPt - mmToPt(3);
-        createdItems.push(addText(qtyContent, (left + right) / 2, qY, Justification.CENTER, 0));
+        createdItems.push(addText(qtyContent, (left + right) / 2, qY, Justification.CENTER, 0, fontSizeQty));
 
         // ---------- group everything ----------
         var grp = dimLayer.groupItems.add();
