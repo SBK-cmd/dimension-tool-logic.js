@@ -1,7 +1,7 @@
 /*
   dimension-tool-logic.js  (remote-hosted ExtendScript logic)
   --------------------------------------------------------------
-  DIMENSION_TOOL_VERSION = "1.5.0"
+  DIMENSION_TOOL_VERSION = "1.6.0"
 
   Fetched fresh from the web by the Dimension Line Tool panel every
   time you click "สร้างเส้นบอกขนาด" (or live-adjust a font-size field),
@@ -11,7 +11,7 @@
   Exposes createDimensionLines(paramsJSON), called right after this
   script is evaluated.
 */
-var DIMENSION_TOOL_VERSION = "1.5.0";
+var DIMENSION_TOOL_VERSION = "1.6.0";
 
 // ---------- Thai strings used on the artboard / console (unicode-escaped for safety) ----------
 var STR_ERR_NO_DOC = "กรุณาเปิดไฟล์งานก่อนใช้งานนี้";
@@ -138,8 +138,6 @@ function createDimensionLines(paramsJSON) {
             return path;
         }
         function addCap(x, y, dirX, dirY) {
-            // dirX/dirY: unit vector along the dimension line at this end.
-            // Draws a short tick perpendicular to the line, centered on (x, y).
             var perpX = -dirY, perpY = dirX;
             var half = capLen / 2;
             return addLine(x - perpX * half, y - perpY * half, x + perpX * half, y + perpY * half);
@@ -173,18 +171,16 @@ function createDimensionLines(paramsJSON) {
 
         // ===== WIDTH dimension (horizontal, above artwork) =====
         var wY = top + gapPt;
-        createdItems.push(addLine(left, wY, right, wY));   // main horizontal dim line
-        createdItems.push(addCap(left, wY, 1, 0));          // end-cap tick, left
-        createdItems.push(addCap(right, wY, 1, 0));         // end-cap tick, right
-        // baseline offset so the glyphs sit straddling the line (line runs
-        // through the middle of the text) instead of floating above it
-        createdItems.push(addText(widthVal, (left + right) / 2, wY - fontSizeDim * 0.32, Justification.CENTER, 0, fontSizeDim));
+        createdItems.push(addLine(left, wY, right, wY));
+        createdItems.push(addCap(left, wY, 1, 0));
+        createdItems.push(addCap(right, wY, 1, 0));
+        createdItems.push(addText(widthVal, (left + right) / 2, wY - fontSizeDim * 0.45, Justification.CENTER, 0, fontSizeDim));
 
         // ===== HEIGHT dimension (vertical, right of artwork) =====
         var hX = right + gapPt;
-        createdItems.push(addLine(hX, top, hX, bottom));    // main vertical dim line
-        createdItems.push(addCap(hX, top, 0, 1));           // end-cap tick, top
-        createdItems.push(addCap(hX, bottom, 0, 1));        // end-cap tick, bottom
+        createdItems.push(addLine(hX, top, hX, bottom));
+        createdItems.push(addCap(hX, top, 0, 1));
+        createdItems.push(addCap(hX, bottom, 0, 1));
         createdItems.push(addText(heightVal, hX + textGap, (top + bottom) / 2, Justification.LEFT,
             rotateVertical ? 90 : 0, fontSizeDim));
 
@@ -200,9 +196,6 @@ function createDimensionLines(paramsJSON) {
             createdItems[gi].move(grp, ElementPlacement.PLACEATBEGINNING);
         }
 
-        // keep the ORIGINAL artwork selected (not the new dimension group) so
-        // repeated calls — e.g. live updates while adjusting font size —
-        // keep measuring the same artwork instead of the dimension lines
         doc.selection = sel;
         app.redraw();
 
