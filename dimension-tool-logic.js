@@ -1,7 +1,7 @@
 /*
   dimension-tool-logic.js  (remote-hosted ExtendScript logic)
   --------------------------------------------------------------
-  DIMENSION_TOOL_VERSION = "1.7.0"
+  DIMENSION_TOOL_VERSION = "1.8.0"
 
   Fetched fresh from the web by the Dimension Line Tool panel every
   time you click "สร้างเส้นบอกขนาด" (or live-adjust a font-size field),
@@ -11,7 +11,7 @@
   Exposes createDimensionLines(paramsJSON), called right after this
   script is evaluated.
 */
-var DIMENSION_TOOL_VERSION = "1.7.0";
+var DIMENSION_TOOL_VERSION = "1.8.0";
 
 // ---------- Thai strings used on the artboard / console (unicode-escaped for safety) ----------
 var STR_ERR_NO_DOC = "กรุณาเปิดไฟล์งานก่อนใช้งานนี้";
@@ -140,7 +140,7 @@ function createDimensionLines(paramsJSON) {
             var half = capLen / 2;
             return addLine(x - perpX * half, y - perpY * half, x + perpX * half, y + perpY * half);
         }
-        function addText(content, x, y, justification, rotateDeg, sizePt, centerOnLineY) {
+        function addText(content, x, y, justification, rotateDeg, sizePt, sitAboveLineY) {
             var t = dimLayer.textFrames.add();
             t.contents = content;
             t.textRange.characterAttributes.size = sizePt;
@@ -162,13 +162,13 @@ function createDimensionLines(paramsJSON) {
             t.paragraphs[0].justification = justification;
             t.position = [x, y];
             if (rotateDeg) t.rotate(rotateDeg);
-            if (centerOnLineY !== undefined && !rotateDeg) {
+            if (sitAboveLineY !== undefined && !rotateDeg) {
                 // measure the text's ACTUAL rendered bounds (not a guessed
-                // font-metric constant) and shift it so its vertical center
-                // lands exactly on the dimension line, for any font/size
+                // font-metric constant) and shift it so its bottom edge sits
+                // just above the dimension line, for any font/size
                 var vb = t.visibleBounds; // [left, top, right, bottom]
-                var curCenterY = (vb[1] + vb[3]) / 2;
-                t.translate(0, centerOnLineY - curCenterY);
+                var desiredBottom = sitAboveLineY + textGap;
+                t.translate(0, desiredBottom - vb[3]);
             }
             return t;
         }
@@ -180,8 +180,6 @@ function createDimensionLines(paramsJSON) {
         createdItems.push(addLine(left, wY, right, wY));
         createdItems.push(addCap(left, wY, 1, 0));
         createdItems.push(addCap(right, wY, 1, 0));
-        // centerOnLineY makes the text's measured vertical center land
-        // exactly on the line, regardless of font/size (see addText above)
         createdItems.push(addText(widthVal, (left + right) / 2, wY, Justification.CENTER, 0, fontSizeDim, wY));
 
         // ===== HEIGHT dimension (vertical, right of artwork) =====
